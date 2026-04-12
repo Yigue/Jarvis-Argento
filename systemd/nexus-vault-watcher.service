@@ -1,0 +1,15 @@
+[Unit]
+Description=Nexus Brain — vault watcher (Obsidian → OpenWebUI Knowledge)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=-/opt/nexus-brain/.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/nexus-brain/watcher-venv/bin/python /opt/nexus-brain/scripts/vault_watcher.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

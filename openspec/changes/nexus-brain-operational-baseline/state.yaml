@@ -1,0 +1,8 @@
+change: nexus-brain-operational-baseline
+status: spec-complete
+phases:
+  init: done
+  propose: done
+  spec: done
+  design: pending
+  tasks: pending

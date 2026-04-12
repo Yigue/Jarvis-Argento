@@ -1,0 +1,73 @@
+# Nexus Brain — stack soporte (CouchDB, Qdrant, Ollama, Caddy)
+# Ejecutar desde el directorio de despliegue (p. ej. /opt/nexus-brain) donde existen ./caddy, ./vault, etc.
+
+services:
+  couchdb:
+    image: couchdb:3
+    container_name: nexus-couchdb
+    restart: unless-stopped
+    environment:
+      COUCHDB_USER: ${COUCHDB_USER:-admin}
+      COUCHDB_PASSWORD: ${COUCHDB_PASSWORD:?definir COUCHDB_PASSWORD en .env}
+    volumes:
+      - ./couchdb:/opt/couchdb/data
+    ports:
+      - "127.0.0.1:5984:5984"
+    networks:
+      - nexus_net
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: nexus-qdrant
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6333:6333"
+    volumes:
+      - ./qdrant:/qdrant/storage
+    networks:
+      - nexus_net
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: nexus-ollama
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - ./ollama:/root/.ollama
+    networks:
+      - nexus_net
+    # GPU NVIDIA: descomentar y tener nvidia-container-toolkit en el host
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  caddy:
+    image: caddy:2
+    container_name: nexus-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - couchdb
+    networks:
+      - nexus_net
+
+networks:
+  nexus_net:
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:

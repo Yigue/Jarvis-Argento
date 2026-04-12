@@ -1,0 +1,28 @@
+schema: spec-driven
+
+context: |
+  Tech stack: Docker (CouchDB, Qdrant, Ollama, Caddy); OpenWebUI/OpenClaw nativo en host; Obsidian LiveSync; Python watcher opcional.
+  Architecture: VPS “Nexus Brain”, vault en /opt/nexus-brain/vault, RAG vía Knowledge Bases de OpenWebUI.
+  Testing: Sin suite en repo; validación manual con curl, UI y logs de servicios.
+  Style: Markdown, secretos en .env (no versionados), puertos solo loopback salvo 80/443 en Caddy.
+
+rules:
+  proposal:
+    - Incluir plan de rollback en cambios de infraestructura.
+    - Identificar módulos/servicios afectados (compose, UI, scripts).
+  specs:
+    - Usar Given/When/Then en escenarios.
+    - Usar palabras clave RFC 2119 (MUST, SHALL, SHOULD, MAY).
+  design:
+    - Incluir diagramas de secuencia para flujos RAG/sync complejos.
+    - Documentar decisiones de arquitectura con justificación breve.
+  tasks:
+    - Agrupar por fase (infra, integración, pruebas).
+    - Numeración jerárquica (1.1, 1.2).
+    - Tareas cerrables en una sesión.
+  apply:
+    - Seguir patrones existentes del repo y del análisis aprobado.
+  verify:
+    - Comparar implementación con cada escenario de spec cuando aplique.
+  archive:
+    - Advertir antes de fusionar deltas destructivos.

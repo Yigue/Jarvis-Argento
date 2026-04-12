@@ -1,0 +1,9 @@
+# Uso: Ollama nativo en el host (mejor en VPS sin GPU).
+#   docker compose -f docker-compose.yml -f docker-compose.no-ollama.yml up -d
+#
+# En OpenClaw: URL Ollama http://localhost:11434
+
+services:
+  ollama:
+    profiles:
+      - disabled
