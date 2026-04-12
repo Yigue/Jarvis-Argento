@@ -4,6 +4,7 @@
 #   sudo ./scripts/install.sh
 #   sudo NEXUS_ROOT=/opt/nexus-brain ./scripts/install.sh --install-deps
 #   sudo ./scripts/install.sh --skip-ollama    # Ollama nativo en el host
+#   sudo ./scripts/install.sh --force-docker-ollama  # ignorar detección (requiere 11434 libre)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -14,6 +15,7 @@ source "$SCRIPT_DIR/lib.sh"
 NEXUS_ROOT="${NEXUS_ROOT:-/opt/nexus-brain}"
 INSTALL_DEPS=false
 SKIP_OLLAMA=false
+FORCE_DOCKER_OLLAMA=false
 
 usage() {
   sed -n '1,20p' "$0" | tail -n +2
@@ -31,6 +33,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --skip-ollama)
       SKIP_OLLAMA=true
+      shift
+      ;;
+    --force-docker-ollama)
+      FORCE_DOCKER_OLLAMA=true
       shift
       ;;
     -h | --help)
@@ -102,6 +108,32 @@ fi
 "$NEXUS_ROOT/watcher-venv/bin/pip" install -q -r "$NEXUS_ROOT/scripts/requirements.txt"
 
 cp -f "$REPO_ROOT/systemd/nexus-vault-watcher.service" "$NEXUS_ROOT/scripts/nexus-vault-watcher.service.example"
+
+# Puerto 11434 ocupado → típicamente Ollama nativo; Docker no puede mapear el mismo puerto.
+port_11434_in_use() {
+  if command -v ss >/dev/null 2>&1; then
+    ss -tln 2>/dev/null | grep -q ':11434'
+    return $?
+  fi
+  curl -sf --max-time 2 http://127.0.0.1:11434/api/tags >/dev/null 2>&1
+}
+
+if [[ "$SKIP_OLLAMA" != true && "$FORCE_DOCKER_OLLAMA" != true ]]; then
+  if port_11434_in_use; then
+    echo ""
+    echo "[install] El puerto 11434 ya está en uso (casi seguro Ollama nativo en el host)."
+    echo "[install] Se omite el contenedor nexus-ollama; OpenClaw debe usar: http://127.0.0.1:11434"
+    echo "[install] (Para forzar Ollama en Docker: detené el servicio nativo y usá --force-docker-ollama)"
+    echo ""
+    SKIP_OLLAMA=true
+  fi
+fi
+
+if [[ "$FORCE_DOCKER_OLLAMA" == true ]]; then
+  if port_11434_in_use; then
+    die "11434 está ocupado. Detené Ollama nativo (p. ej. systemctl stop ollama) o ejecutá sin --force-docker-ollama para usar solo el nativo."
+  fi
+fi
 
 cd "$NEXUS_ROOT"
 if [[ "$SKIP_OLLAMA" == true ]]; then

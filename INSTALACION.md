@@ -46,6 +46,23 @@ sudo ./scripts/install.sh --skip-ollama
 
 En OpenClaw: **Ollama URL** → `http://127.0.0.1:11434`. Subí el **Request Timeout** (p. ej. 300 s) si usás CPU.
 
+Si **ya tenés Ollama nativo**, no hace falta `--skip-ollama`: el instalador detecta el puerto 11434 ocupado y **no levanta** el contenedor `nexus-ollama` automáticamente.
+
+### Error: `address already in use` en `127.0.0.1:11434`
+
+Significa que Ollama (u otro proceso) ya escucha en ese puerto. **No apagues Ollama nativo** si querés seguir usándolo: levantá el stack **sin** Ollama en Docker:
+
+```bash
+cd /opt/nexus-brain
+# ajustá la ruta si usaste --nexus-root distinto
+docker compose down
+docker compose -f docker-compose.yml -f docker-compose.no-ollama.yml up -d
+```
+
+Luego volvé a ejecutar `sudo ./scripts/install.sh` desde el repo (idempotente) o solo el `docker compose` de arriba si el resto ya está bien.
+
+**Alternativa** (solo si querés Ollama **solo** en Docker): `systemctl stop ollama` (y opcional `systemctl disable ollama`), liberá 11434 y ejecutá `sudo ./scripts/install.sh --force-docker-ollama`.
+
 ### Otro directorio de datos
 
 ```bash
