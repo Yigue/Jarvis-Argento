@@ -1,10 +1,10 @@
-# Generado por scripts/install.sh desde variables DOMAIN_CLAW, DOMAIN_SYNC, OPENCLAW_PORT
+# Procesado por scripts/install.sh con envsubst (sintaxis ${VAR} → valor real).
 # OpenClaw/OpenWebUI nativo en el host → Caddy alcanza el proceso vía host.docker.internal
 
-{$DOMAIN_CLAW} {
-    reverse_proxy host.docker.internal:{$OPENCLAW_PORT}
+${DOMAIN_CLAW} {
+    reverse_proxy host.docker.internal:${OPENCLAW_PORT}
 }
 
-{$DOMAIN_SYNC} {
+${DOMAIN_SYNC} {
     reverse_proxy couchdb:5984
 }
