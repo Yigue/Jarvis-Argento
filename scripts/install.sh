@@ -102,6 +102,12 @@ envsubst '${DOMAIN_CLAW} ${DOMAIN_SYNC} ${OPENCLAW_PORT}' \
 cp -f "$REPO_ROOT/watcher/vault_watcher.py" "$NEXUS_ROOT/scripts/"
 cp -f "$REPO_ROOT/watcher/requirements.txt" "$NEXUS_ROOT/scripts/"
 
+# Copiar lib.sh y scripts adicionales al directorio de producción (necesario para los servicios systemd)
+cp -f "$SCRIPT_DIR/lib.sh" "$NEXUS_ROOT/scripts/lib.sh"
+for script in sync-vault.sh configure-openclaw.sh install-vault-sync-timer.sh; do
+  [[ -f "$SCRIPT_DIR/$script" ]] && cp -f "$SCRIPT_DIR/$script" "$NEXUS_ROOT/scripts/$script"
+done
+
 if [[ ! -d "$NEXUS_ROOT/watcher-venv" ]]; then
   python3 -m venv "$NEXUS_ROOT/watcher-venv"
 fi

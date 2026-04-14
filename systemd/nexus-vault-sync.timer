@@ -1,0 +1,15 @@
+[Unit]
+Description=Nexus Brain — timer de sincronización Git del vault (cada 30 min)
+Requires=nexus-vault-sync.service
+
+[Timer]
+# Ejecuta 2 minutos después del boot (da tiempo a que la red esté lista)
+OnBootSec=2min
+# Luego cada 30 minutos
+OnUnitActiveSec=30min
+# Persistente: si el sistema estuvo apagado y se perdió un disparo, lo ejecuta al arrancar
+Persistent=true
+Unit=nexus-vault-sync.service
+
+[Install]
+WantedBy=timers.target
