@@ -4,17 +4,21 @@ Sincroniza cambios del vault Obsidian con la Knowledge Base de OpenWebUI/OpenCla
 Variables de entorno (típicamente vía systemd EnvironmentFile):
   VAULT_PATH, OPENWEBUI_URL, OPENWEBUI_API_KEY, KNOWLEDGE_ID
 
-Mejoras respecto a v1:
+Características:
 - Estado persistente en .vault-watcher-state.json (evita re-indexar archivos no cambiados)
-- La sincronización inicial solo sube archivos nuevos o modificados desde el último run
+- Sincronización inicial incremental (solo archivos nuevos o modificados)
+- Extracción de frontmatter YAML para enriquecer el contexto RAG
+- Metadatos de ruta relativa para mejor retrieval por carpeta/sección
 """
 from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import requests
 
@@ -35,6 +39,63 @@ def log(msg: str) -> None:
 def _is_excluded(path: Path) -> bool:
     """Devuelve True si el archivo debe ignorarse."""
     return ".obsidian" in path.parts or path.suffix.lower() != ".md"
+
+
+# ── Extracción de frontmatter YAML ───────────────────────────────────────────
+
+_FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
+
+
+def extract_frontmatter(path: Path) -> dict[str, Any]:
+    """
+    Extrae el frontmatter YAML de una nota Obsidian.
+    Retorna un dict con los campos encontrados (o vacío si no hay frontmatter).
+    Solo parsea los campos más comunes sin depender de PyYAML para minimizar deps.
+    """
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return {}
+
+    m = _FRONTMATTER_RE.match(text)
+    if not m:
+        return {}
+
+    meta: dict[str, Any] = {}
+    for line in m.group(1).splitlines():
+        if ":" not in line:
+            continue
+        key, _, value = line.partition(":")
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if value:
+            meta[key] = value
+
+    return meta
+
+
+def build_metadata(path: Path) -> dict[str, Any]:
+    """
+    Construye el objeto de metadatos para OpenWebUI Knowledge API.
+    Combina frontmatter Obsidian + información de ruta relativa del vault.
+    """
+    vault_root = Path(VAULT_PATH)
+    try:
+        rel_path = path.relative_to(vault_root)
+    except ValueError:
+        rel_path = path
+
+    frontmatter = extract_frontmatter(path)
+
+    return {
+        "source": str(rel_path),          # ruta relativa dentro del vault
+        "section": rel_path.parts[0] if len(rel_path.parts) > 1 else "root",
+        "filename": path.name,
+        **{k: v for k, v in frontmatter.items() if k in (
+            "title", "tags", "date", "aliases", "type", "status",
+            "created", "modified", "author", "category", "area",
+        )},
+    }
 
 
 # ── Estado persistente ──────────────────────────────────────────────────────
@@ -63,7 +124,8 @@ def save_state(state: dict[str, float]) -> None:
 
 def upload_file(filepath: str) -> bool:
     """
-    Sube un archivo .md a la Knowledge Base.
+    Sube un archivo .md a la Knowledge Base de OpenWebUI.
+    Incluye metadatos de frontmatter y ruta relativa para mejorar el retrieval RAG.
     Devuelve True si tuvo éxito.
     """
     path = Path(filepath)
@@ -73,14 +135,23 @@ def upload_file(filepath: str) -> bool:
         log("Falta OPENWEBUI_API_KEY o KNOWLEDGE_ID; no se sube nada.")
         return False
 
-    log(f"Indexando: {path.name}")
+    meta = build_metadata(path)
+    vault_root = Path(VAULT_PATH)
+    try:
+        display_name = str(path.relative_to(vault_root))
+    except ValueError:
+        display_name = path.name
+
+    log(f"Indexando: {display_name}")
     try:
         with path.open("rb") as f:
             files = {"file": (path.name, f, "text/markdown")}
+            data = {"metadata": json.dumps(meta)}
             r = requests.post(
                 f"{OPENWEBUI_URL}/api/v1/knowledge/{KNOWLEDGE_ID}/file/add",
                 headers=HEADERS,
                 files=files,
+                data=data,
                 timeout=120,
             )
     except requests.RequestException as e:
@@ -88,7 +159,11 @@ def upload_file(filepath: str) -> bool:
         return False
 
     if r.status_code == 200:
-        log(f"OK {path.name}")
+        section = meta.get("section", "")
+        tags = meta.get("tags", "")
+        extra = f" [{section}]" if section and section != "root" else ""
+        extra += f" #{tags}" if tags else ""
+        log(f"OK {display_name}{extra}")
         return True
     else:
         log(f"HTTP {r.status_code}: {r.text[:500]}")

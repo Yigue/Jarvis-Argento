@@ -1,0 +1,14 @@
+[Unit]
+Description=Nexus Brain — sincronizar Obsidian Vault desde Git
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/opt/nexus-brain/.env
+ExecStart=/bin/bash /opt/nexus-brain/scripts/sync-vault.sh /opt/nexus-brain
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
