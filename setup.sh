@@ -88,15 +88,21 @@ step "Instalando stack base (deps del sistema + Docker + servicios)"
 bash "$SCRIPT_DIR/scripts/install.sh" --install-deps
 ok "Stack base instalado y corriendo"
 
-# ── PASO 4: Clonar / sincronizar Obsidian Vault desde Git ────────────────────
-if [[ -n "${VAULT_GIT_URL:-}" ]]; then
-  step "Sincronizando Obsidian Vault desde Git"
-  bash "$SCRIPT_DIR/scripts/sync-vault.sh" "$NEXUS_ROOT"
-  ok "Vault sincronizado en ${VAULT_PATH:-$NEXUS_ROOT/vault}"
-else
-  warn "VAULT_GIT_URL no definida → vault no clonado"
-  echo "  Agregá VAULT_GIT_URL al .env y ejecutá: sudo ./scripts/sync-vault.sh $NEXUS_ROOT"
+# ── PASO 3.5: Instalar OpenClaw via Docker ─────────────────────────────────────
+step "Lanzando OpenClaw en Docker..."
+bash "$SCRIPT_DIR/scripts/setup-openclaw.sh" "$NEXUS_ROOT"
+ok "OpenClaw container inicializado"
+
+# ── PASO 4: Preparar directorio del vault (LiveSync vía CouchDB) ──────────────
+step "Preparando directorio del vault Obsidian"
+VAULT_DIR="${VAULT_PATH:-$NEXUS_ROOT/vault}"
+install -d -m 0755 "$VAULT_DIR"
+if [[ -n "${SUDO_USER:-}" ]]; then
+  chown -R "${SUDO_USER}:${SUDO_USER}" "$VAULT_DIR" 2>/dev/null || true
 fi
+ok "Directorio del vault listo: $VAULT_DIR"
+echo "  El vault se pobla vía Self-hosted LiveSync desde tu Obsidian."
+echo "  Configurá el plugin en Obsidian → sync.${DOMAIN_SYNC:-tudominio.com}"
 
 # ── PASO 5: Descargar modelos Ollama (gemma4 + cualquier otro en OLLAMA_MODELS)
 step "Descargando modelos Ollama"
@@ -118,12 +124,13 @@ else
   fi
 fi
 
-# ── PASO 7: Instalar timer systemd para sincronización Git periódica del vault
-if [[ -n "${VAULT_GIT_URL:-}" ]]; then
-  step "Instalando timer de sincronización Git (cada 30 min)"
-  bash "$SCRIPT_DIR/scripts/install-vault-sync-timer.sh" "$NEXUS_ROOT" \
-    || warn "Timer de sincronización no instalado — hacelo manualmente"
+# ── PASO 6.5: Inyectar Tools/Skills personalizados a OpenClaw ─────────────────
+if [[ -n "${OPENCLAW_ADMIN_PASSWORD:-}" ]]; then
+  step "Inyectando skills Python en WebUI (Crear Notas, etc...)"
+  bash "$SCRIPT_DIR/scripts/inject-skills.sh" "$NEXUS_ROOT" || warn "Fallo inyeccion de skills. Podes cargarlas a mano."
 fi
+
+# ── PASO 7: (LiveSync) CouchDB sincroniza el vault en tiempo real — no se necesita timer Git
 
 # ── PASO 8: Watcher vault → Knowledge Base (requiere API Key + Knowledge ID)
 if [[ -n "${KNOWLEDGE_ID:-}" && -n "${OPENWEBUI_API_KEY:-}" ]]; then
@@ -153,13 +160,13 @@ echo -e "  CouchDB LiveSync:   ${C_OK}https://${DOMAIN_SYNC}${C_RESET}"
 echo -e "  Ollama API:         http://127.0.0.1:11434"
 echo -e "  Qdrant:             http://127.0.0.1:6333"
 echo ""
-echo -e "  Modelo primario:    ${C_BOLD}${PRIMARY_MODEL:-gemma4}${C_RESET} (Ollama local)"
+echo -e "  Modelo primario:    ${C_BOLD}${PRIMARY_MODEL:-gemma4:7b}${C_RESET} (Ollama local)"
 if [[ -n "${GEMINI_API_KEY:-}" ]]; then
   echo -e "  Modelo fallback:    ${C_BOLD}${GEMINI_MODEL:-gemini-2.5-flash-preview}${C_RESET} (Google AI)"
 fi
-echo -e "  Vault:              ${VAULT_PATH:-$NEXUS_ROOT/vault}"
+echo -e "  Vault:              ${VAULT_PATH:-$NEXUS_ROOT/vault}  ← se puebla via LiveSync"
 echo ""
+echo -e "  Obsidian LiveSync:  https://${DOMAIN_SYNC:-tudominio.com}"
 echo -e "  Logs del watcher:   journalctl -u nexus-vault-watcher -f"
-echo -e "  Logs del sync:      journalctl -u nexus-vault-sync -f"
 echo -e "  Health check:       $SCRIPT_DIR/scripts/health-check.sh $NEXUS_ROOT"
 echo ""
